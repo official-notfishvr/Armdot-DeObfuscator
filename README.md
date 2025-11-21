@@ -1,4 +1,5 @@
 # Armdot DeObfuscator
+star the repository and i will publicly post it!
 
 ## Features
 
