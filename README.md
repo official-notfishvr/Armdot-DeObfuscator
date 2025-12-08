@@ -1,6 +1,6 @@
 # Armdot DeObfuscator
 
-A comprehensive deobfuscator for ArmDot-protected .NET assemblies using dnlib. Star the repository and I will publicly post it! when its done or we get stars.
+A deobfuscator for ArmDot-protected .NET assemblies using dnlib. Star the repository and I will publicly post it! when its done or we get stars.
 
 ## Features
 
