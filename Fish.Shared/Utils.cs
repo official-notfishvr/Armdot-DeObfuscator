@@ -1,14 +1,19 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using dnlib.DotNet;
 using dnlib.DotNet.Emit;
 
-namespace Fish_DeObfuscator.core.Utils
+namespace Fish.Shared
 {
     public static class Utils
     {
-        private static readonly Random random = new Random();
+        [ThreadStatic]
+        private static Random _random;
+        private static Random random => _random ??= new Random(Environment.TickCount ^ Thread.CurrentThread.ManagedThreadId);
+
+        private static readonly object _usedNamesLock = new object();
         private static readonly HashSet<string> usedNames = new HashSet<string>();
 
         public static string GenerateRandomName(int length = 8)
@@ -31,30 +36,77 @@ namespace Fish_DeObfuscator.core.Utils
                     name = name + random.Next(1000, 9999).ToString();
                     break;
                 }
-            } while (usedNames.Contains(name));
+            } while (IsNameUsed(name));
 
-            usedNames.Add(name);
+            AddUsedName(name);
             return name;
         }
 
-        public static string RandomString(int length)
+        public static string GenerateSpecialCharName(int length = 8)
         {
-            return GenerateRandomName(length);
+            const string specialChars = "#$%^&*()_+-=<>?@!|/";
+            string name;
+            int attempts = 0;
+            do
+            {
+                char[] stringChars = new char[length];
+                for (int i = 0; i < length; i++)
+                {
+                    stringChars[i] = specialChars[random.Next(specialChars.Length)];
+                }
+                name = new string(stringChars);
+                attempts++;
+
+                if (attempts > 1000)
+                {
+                    name = name + random.Next(1000, 9999).ToString();
+                    break;
+                }
+            } while (IsNameUsed(name));
+
+            AddUsedName(name);
+            return name;
         }
+
+        public static string RandomString(int length) => GenerateRandomName(length);
 
         public static bool IsUnitySpecialType(TypeDef type)
         {
             if (type == null)
                 return false;
-
             try
             {
-                return type.BaseType?.FullName == "UnityEngine.MonoBehaviour"
+                if (type.BaseType?.FullName == "UnityEngine.MonoBehaviour"
                     || type.BaseType?.FullName == "UnityEngine.ScriptableObject"
                     || type.FullName.StartsWith("UnityEngine.")
                     || type.FullName.StartsWith("UnityEditor.")
                     || type.FullName.StartsWith("System.")
-                    || type.FullName.StartsWith("Microsoft.");
+                    || type.FullName.StartsWith("Microsoft."))
+                    return true;
+
+                if (type.BaseType?.FullName == "BepInEx.BaseUnityPlugin"
+                    || type.BaseType?.FullName?.Contains("BaseUnityPlugin") == true)
+                    return true;
+
+                var baseType = type.BaseType;
+                int depth = 0;
+                while (baseType != null && depth < 10)
+                {
+                    var baseFullName = baseType.FullName;
+                    if (baseFullName == "UnityEngine.MonoBehaviour"
+                        || baseFullName == "UnityEngine.ScriptableObject"
+                        || baseFullName == "BepInEx.BaseUnityPlugin")
+                        return true;
+
+                    if (baseType is TypeDef baseDef)
+                        baseType = baseDef.BaseType;
+                    else
+                        break;
+
+                    depth++;
+                }
+
+                return false;
             }
             catch
             {
@@ -66,37 +118,20 @@ namespace Fish_DeObfuscator.core.Utils
         {
             if (method == null || module == null)
                 return false;
-
             try
             {
                 if (module.EntryPoint != null && method == module.EntryPoint)
-                {
-                    Console.WriteLine($"Protecting entry point method: {method.DeclaringType.FullName}.{method.Name}");
                     return true;
-                }
 
                 if (method.Name == "Main" && method.IsStatic)
                 {
                     bool isMainSignature = false;
-
                     if (method.Parameters.Count == 0)
-                    {
-                        isMainSignature = (method.ReturnType.FullName == "System.Void" || method.ReturnType.FullName == "System.Int32");
-                    }
-                    else if (method.Parameters.Count == 1)
-                    {
-                        var param = method.Parameters[0];
-                        if (param.Type.FullName == "System.String[]")
-                        {
-                            isMainSignature = (method.ReturnType.FullName == "System.Void" || method.ReturnType.FullName == "System.Int32");
-                        }
-                    }
-
+                        isMainSignature = method.ReturnType.FullName == "System.Void" || method.ReturnType.FullName == "System.Int32";
+                    else if (method.Parameters.Count == 1 && method.Parameters[0].Type.FullName == "System.String[]")
+                        isMainSignature = method.ReturnType.FullName == "System.Void" || method.ReturnType.FullName == "System.Int32";
                     if (isMainSignature)
-                    {
-                        Console.WriteLine($"Protecting Main method: {method.DeclaringType.FullName}.{method.Name}");
                         return true;
-                    }
                 }
 
                 if (method.HasCustomAttributes)
@@ -105,10 +140,7 @@ namespace Fish_DeObfuscator.core.Utils
                     {
                         var attrTypeName = attr.AttributeType.FullName;
                         if (attrTypeName.Contains("DllExport") || attrTypeName.Contains("UnmanagedExport") || attrTypeName.Contains("Export"))
-                        {
-                            Console.WriteLine($"Protecting exported method: {method.DeclaringType.FullName}.{method.Name}");
                             return true;
-                        }
                     }
                 }
 
@@ -120,32 +152,14 @@ namespace Fish_DeObfuscator.core.Utils
                         {
                             var attrTypeName = attr.AttributeType.FullName;
                             if (attrTypeName.Contains("ComVisible") || attrTypeName.Contains("Guid") || attrTypeName.Contains("ClassInterface"))
-                            {
-                                Console.WriteLine($"Protecting COM visible method: {method.DeclaringType.FullName}.{method.Name}");
                                 return true;
-                            }
-                        }
-                    }
-
-                    if (method.HasCustomAttributes)
-                    {
-                        foreach (var attr in method.CustomAttributes)
-                        {
-                            var attrTypeName = attr.AttributeType.FullName;
-                            if (attrTypeName.Contains("ComVisible") || attrTypeName.Contains("DispId"))
-                            {
-                                Console.WriteLine($"Protecting COM visible method: {method.DeclaringType.FullName}.{method.Name}");
-                                return true;
-                            }
                         }
                     }
                 }
-
                 return false;
             }
-            catch (Exception ex)
+            catch
             {
-                Console.WriteLine($"Error checking entry point for method {method?.Name}: {ex.Message}");
                 return true;
             }
         }
@@ -154,19 +168,12 @@ namespace Fish_DeObfuscator.core.Utils
         {
             if (type == null || module == null)
                 return false;
-
             try
             {
                 if (type.HasMethods)
-                {
                     foreach (var method in type.Methods)
-                    {
                         if (IsEntryPoint(method, module))
-                        {
                             return true;
-                        }
-                    }
-                }
 
                 if (type.HasCustomAttributes)
                 {
@@ -174,74 +181,63 @@ namespace Fish_DeObfuscator.core.Utils
                     {
                         var attrTypeName = attr.AttributeType.FullName;
                         if (attrTypeName.Contains("ComVisible") || attrTypeName.Contains("Guid") || attrTypeName.Contains("ClassInterface") || attrTypeName.Contains("DllExport"))
-                        {
-                            Console.WriteLine($"Protecting entry point type: {type.FullName}");
                             return true;
-                        }
                     }
                 }
-
                 return false;
             }
-            catch (Exception ex)
+            catch
             {
-                Console.WriteLine($"Error checking entry point type {type?.Name}: {ex.Message}");
                 return true;
             }
         }
+
+        private static readonly string[] DefaultUnityMethods =
+        {
+            "Awake",
+            "Start",
+            "Update",
+            "LateUpdate",
+            "FixedUpdate",
+            "OnEnable",
+            "OnDisable",
+            "OnDestroy",
+            "OnApplicationPause",
+            "OnApplicationFocus",
+            "OnApplicationQuit",
+            "OnTriggerEnter",
+            "OnTriggerExit",
+            "OnTriggerStay",
+            "OnCollisionEnter",
+            "OnCollisionExit",
+            "OnCollisionStay",
+            "OnMouseDown",
+            "OnMouseUp",
+            "OnMouseEnter",
+            "OnMouseExit",
+            "OnMouseOver",
+            "OnGUI",
+            "OnDrawGizmos",
+            "OnDrawGizmosSelected",
+        };
+
+        public static string[] UnitySpecialMethods { get; set; } = DefaultUnityMethods;
 
         public static bool IsUnitySpecialMethod(MethodDef method)
         {
             if (method == null)
                 return false;
-
-            try
-            {
-                var unityMethods = Fish_DeObfuscator.Program.UnitySpecialMethods;
-                if (unityMethods != null)
-                {
-                    return Array.IndexOf(unityMethods, method.Name) != -1;
-                }
-            }
-            catch { }
-
-            string[] defaultUnityMethods =
-            {
-                "Awake",
-                "Start",
-                "Update",
-                "LateUpdate",
-                "FixedUpdate",
-                "OnEnable",
-                "OnDisable",
-                "OnDestroy",
-                "OnApplicationPause",
-                "OnApplicationFocus",
-                "OnApplicationQuit",
-                "OnTriggerEnter",
-                "OnTriggerExit",
-                "OnTriggerStay",
-                "OnCollisionEnter",
-                "OnCollisionExit",
-                "OnCollisionStay",
-                "OnMouseDown",
-                "OnMouseUp",
-                "OnMouseEnter",
-                "OnMouseExit",
-                "OnMouseOver",
-                "OnGUI",
-                "OnDrawGizmos",
-                "OnDrawGizmosSelected",
-            };
-
-            return Array.IndexOf(defaultUnityMethods, method.Name) != -1;
+            return Array.IndexOf(UnitySpecialMethods, method.Name) != -1;
         }
 
         public static void AddUsedName(string name)
         {
             if (!string.IsNullOrEmpty(name))
             {
-                usedNames.Add(name);
+                lock (_usedNamesLock)
+                {
+                    usedNames.Add(name);
+                }
             }
         }
 
@@ -249,7 +245,6 @@ namespace Fish_DeObfuscator.core.Utils
         {
             if (instruction == null)
                 return false;
-
             return instruction.OpCode == OpCodes.Ldc_I4
                 || instruction.OpCode == OpCodes.Ldc_I4_0
                 || instruction.OpCode == OpCodes.Ldc_I4_1
@@ -268,7 +263,6 @@ namespace Fish_DeObfuscator.core.Utils
         {
             if (instruction == null)
                 return 0;
-
             try
             {
                 switch (instruction.OpCode.Code)
@@ -295,11 +289,7 @@ namespace Fish_DeObfuscator.core.Utils
                         return 8;
                     case Code.Ldc_I4:
                     case Code.Ldc_I4_S:
-                        if (instruction.Operand != null)
-                        {
-                            return Convert.ToInt32(instruction.Operand);
-                        }
-                        return 0;
+                        return instruction.Operand != null ? Convert.ToInt32(instruction.Operand) : 0;
                     default:
                         return 0;
                 }
@@ -310,22 +300,18 @@ namespace Fish_DeObfuscator.core.Utils
             }
         }
 
-        public static bool IsSafeToObfuscate(MethodDef method)
+        public static bool IsSafeToProcess(MethodDef method)
         {
             if (method == null)
                 return false;
-
             try
             {
                 if (method.IsSpecialName || method.IsConstructor || !method.HasBody)
                     return false;
-
                 if (method.IsRuntimeSpecialName || method.IsAbstract || method.IsVirtual)
                     return false;
-
                 if (IsUnitySpecialMethod(method))
                     return false;
-
                 if (HasComplexControlFlow(method))
                     return false;
 
@@ -335,12 +321,9 @@ namespace Fish_DeObfuscator.core.Utils
                     {
                         var attrName = attr.AttributeType.Name;
                         if (attrName.Contains("Serialize") || attrName.Contains("DllImport") || attrName.Contains("MonoPInvoke") || attrName.Contains("Unity"))
-                        {
                             return false;
-                        }
                     }
                 }
-
                 return true;
             }
             catch
@@ -349,22 +332,23 @@ namespace Fish_DeObfuscator.core.Utils
             }
         }
 
-        public static bool IsSafeToObfuscate(MethodDef method, ModuleDefMD module)
+        public static bool IsSafeToProcess(MethodDef method, ModuleDefMD module)
         {
-            if (!IsSafeToObfuscate(method))
+            if (!IsSafeToProcess(method))
                 return false;
-
             if (IsEntryPoint(method, module))
                 return false;
-
             return true;
         }
+
+        public static bool IsSafeToObfuscate(MethodDef method) => IsSafeToProcess(method);
+
+        public static bool IsSafeToObfuscate(MethodDef method, ModuleDefMD module) => IsSafeToProcess(method, module);
 
         public static bool HasComplexControlFlow(MethodDef method)
         {
             if (method?.Body?.Instructions == null)
                 return true;
-
             try
             {
                 int branchCount = 0;
@@ -374,16 +358,10 @@ namespace Fish_DeObfuscator.core.Utils
                 foreach (var instruction in method.Body.Instructions)
                 {
                     if (instruction.OpCode.FlowControl == FlowControl.Branch || instruction.OpCode.FlowControl == FlowControl.Cond_Branch)
-                    {
                         branchCount++;
-                    }
-
                     if (instruction.OpCode == OpCodes.Switch)
-                    {
                         switchCount++;
-                    }
                 }
-
                 return branchCount > 8 || switchCount > 0 || exceptionHandlerCount > 0;
             }
             catch
@@ -396,39 +374,21 @@ namespace Fish_DeObfuscator.core.Utils
         {
             if (instructions == null || index < 0 || index >= instructions.Count)
                 return false;
-
             try
             {
                 for (int offset = 1; offset <= 3 && index + offset < instructions.Count; offset++)
                 {
                     var nextInstruction = instructions[index + offset];
-
                     if (nextInstruction.OpCode == OpCodes.Nop || nextInstruction.OpCode == OpCodes.Pop)
                         continue;
 
-                    if (
-                        nextInstruction.OpCode.FlowControl == FlowControl.Branch
-                        || nextInstruction.OpCode.FlowControl == FlowControl.Cond_Branch
-                        || nextInstruction.OpCode == OpCodes.Switch
-                        || nextInstruction.OpCode == OpCodes.Br
-                        || nextInstruction.OpCode == OpCodes.Br_S
-                        || nextInstruction.OpCode == OpCodes.Brfalse
-                        || nextInstruction.OpCode == OpCodes.Brfalse_S
-                        || nextInstruction.OpCode == OpCodes.Brtrue
-                        || nextInstruction.OpCode == OpCodes.Brtrue_S
-                    )
-                    {
+                    if (nextInstruction.OpCode.FlowControl == FlowControl.Branch || nextInstruction.OpCode.FlowControl == FlowControl.Cond_Branch || nextInstruction.OpCode == OpCodes.Switch)
                         return true;
-                    }
 
                     if (nextInstruction.OpCode == OpCodes.Ceq || nextInstruction.OpCode == OpCodes.Cgt || nextInstruction.OpCode == OpCodes.Clt || nextInstruction.OpCode == OpCodes.Cgt_Un || nextInstruction.OpCode == OpCodes.Clt_Un)
-                    {
                         return true;
-                    }
-
                     break;
                 }
-
                 return false;
             }
             catch
@@ -441,15 +401,12 @@ namespace Fish_DeObfuscator.core.Utils
         {
             if (instructions == null || index < 0)
                 return false;
-
             try
             {
                 if (value == 0 || value == 1 || value == -1)
                     return false;
-
                 if (Math.Abs(value) > 10000)
                     return false;
-
                 if (IsInControlFlowContext(instructions, index))
                     return false;
 
@@ -468,11 +425,8 @@ namespace Fish_DeObfuscator.core.Utils
                         || nextInstruction.OpCode == OpCodes.Stelem_I8
                         || nextInstruction.OpCode == OpCodes.Stelem_Ref
                     )
-                    {
                         return false;
-                    }
                 }
-
                 return true;
             }
             catch
@@ -481,55 +435,10 @@ namespace Fish_DeObfuscator.core.Utils
             }
         }
 
-        public static int ProcessMethodConstantsSafely(MethodDef method, ModuleDefMD module, Func<Instruction, int, bool> replaceFunction)
-        {
-            if (!IsSafeToObfuscate(method, module) || replaceFunction == null)
-                return 0;
-
-            try
-            {
-                var instructions = method.Body.Instructions.ToList();
-                int processedCount = 0;
-
-                for (int i = 0; i < instructions.Count; i++)
-                {
-                    var instruction = instructions[i];
-
-                    if (IsIntegerConstant(instruction))
-                    {
-                        int value = GetConstantValue(instruction);
-
-                        if (IsConstantSafeToReplace(value, instructions, i))
-                        {
-                            try
-                            {
-                                if (replaceFunction(instruction, value))
-                                {
-                                    processedCount++;
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine($"Error replacing constant {value} in method {method.Name}: {ex.Message}");
-                            }
-                        }
-                    }
-                }
-
-                return processedCount;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error processing method constants for {method.Name}: {ex.Message}");
-                return 0;
-            }
-        }
-
         public static void SafeReplaceInstruction(List<Instruction> instructions, Instruction oldInstruction, List<Instruction> newInstructions)
         {
             if (oldInstruction == null || newInstructions == null || newInstructions.Count == 0)
                 return;
-
             try
             {
                 int index = instructions.IndexOf(oldInstruction);
@@ -537,30 +446,31 @@ namespace Fish_DeObfuscator.core.Utils
                 {
                     instructions.RemoveAt(index);
                     for (int i = 0; i < newInstructions.Count; i++)
-                    {
                         instructions.Insert(index + i, newInstructions[i]);
-                    }
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error replacing instruction: {ex.Message}");
+                Logger.Error($"Error replacing instruction: {ex.Message}");
             }
         }
 
-        public static Random GetRandom()
-        {
-            return random;
-        }
+        public static Random GetRandom() => random;
 
         public static void ClearUsedNames()
         {
-            usedNames.Clear();
+            lock (_usedNamesLock)
+            {
+                usedNames.Clear();
+            }
         }
 
         public static bool IsNameUsed(string name)
         {
-            return usedNames.Contains(name);
+            lock (_usedNamesLock)
+            {
+                return usedNames.Contains(name);
+            }
         }
 
         public static bool IsLoadLocal(Instruction instr)
@@ -594,6 +504,14 @@ namespace Fish_DeObfuscator.core.Utils
             return null;
         }
 
+        public static Instruction FindInstruction(IList<Instruction> instrs, OpCode opCode)
+        {
+            foreach (var instr in instrs)
+                if (instr.OpCode == opCode)
+                    return instr;
+            return null;
+        }
+
         public static int EmulateAndResolveLocal(MethodDef method, byte[] blob, Local blobPtr, Local targetLocal, Instruction targetInstr)
         {
             var instrs = method.Body.Instructions;
@@ -624,7 +542,6 @@ namespace Fish_DeObfuscator.core.Utils
             {
                 if (instrs[i] == targetInstr)
                     break;
-
                 if (IsStoreLocal(instrs[i]))
                 {
                     int idx = instrs.IndexOf(instrs[i]);
@@ -637,26 +554,20 @@ namespace Fish_DeObfuscator.core.Utils
                 }
             }
 
-            int maxSteps = 20000;
-            int ip = 0;
+            int maxSteps = 20000,
+                ip = 0;
             var stack = new Stack<int>();
 
             while (ip < instrs.Count && maxSteps-- > 0)
             {
                 var instr = instrs[ip];
                 if (instr == targetInstr)
-                {
-                    if (targetLocal.Index < locals.Length)
-                        return locals[targetLocal.Index];
-                    return -1;
-                }
+                    return targetLocal.Index < locals.Length ? locals[targetLocal.Index] : -1;
 
                 try
                 {
                     if (IsIntegerConstant(instr))
-                    {
                         stack.Push(GetConstantValue(instr));
-                    }
                     else if (IsLoadLocal(instr))
                     {
                         var l = GetLocal(instr, method.Body.Variables);
@@ -668,67 +579,39 @@ namespace Fish_DeObfuscator.core.Utils
                         if (stack.Count > 0 && l != null && l.Index < locals.Length)
                             locals[l.Index] = stack.Pop();
                     }
-                    else if (instr.OpCode == OpCodes.Add)
+                    else if (instr.OpCode == OpCodes.Add && stack.Count >= 2)
                     {
-                        if (stack.Count >= 2)
-                        {
-                            int b = stack.Pop();
-                            int a = stack.Pop();
-                            stack.Push(a + b);
-                        }
+                        int b = stack.Pop(),
+                            a = stack.Pop();
+                        stack.Push(a + b);
                     }
-                    else if (instr.OpCode == OpCodes.Sub)
+                    else if (instr.OpCode == OpCodes.Sub && stack.Count >= 2)
                     {
-                        if (stack.Count >= 2)
-                        {
-                            int b = stack.Pop();
-                            int a = stack.Pop();
-                            stack.Push(a - b);
-                        }
+                        int b = stack.Pop(),
+                            a = stack.Pop();
+                        stack.Push(a - b);
                     }
-                    else if (instr.OpCode == OpCodes.Mul)
+                    else if (instr.OpCode == OpCodes.Mul && stack.Count >= 2)
                     {
-                        if (stack.Count >= 2)
-                        {
-                            int b = stack.Pop();
-                            int a = stack.Pop();
-                            stack.Push(a * b);
-                        }
+                        int b = stack.Pop(),
+                            a = stack.Pop();
+                        stack.Push(a * b);
                     }
-                    else if (instr.OpCode == OpCodes.Div)
+                    else if (instr.OpCode == OpCodes.Div && stack.Count >= 2)
                     {
-                        if (stack.Count >= 2)
-                        {
-                            int b = stack.Pop();
-                            int a = stack.Pop();
-                            stack.Push(b == 0 ? 0 : a / b);
-                        }
+                        int b = stack.Pop(),
+                            a = stack.Pop();
+                        stack.Push(b == 0 ? 0 : a / b);
                     }
-                    else if (instr.OpCode == OpCodes.Ldind_I4)
+                    else if (instr.OpCode == OpCodes.Ldind_I4 && stack.Count >= 1)
                     {
-                        if (stack.Count >= 1)
-                        {
-                            int addr = stack.Pop();
-                            if (blob != null && addr >= 0 && addr + 4 <= blob.Length)
-                            {
-                                stack.Push(BitConverter.ToInt32(blob, addr));
-                            }
-                            else
-                            {
-                                stack.Push(0);
-                            }
-                        }
+                        int addr = stack.Pop();
+                        stack.Push(blob != null && addr >= 0 && addr + 4 <= blob.Length ? BitConverter.ToInt32(blob, addr) : 0);
                     }
-                    else if (instr.OpCode == OpCodes.Pop)
-                    {
-                        if (stack.Count > 0)
-                            stack.Pop();
-                    }
-                    else if (instr.OpCode == OpCodes.Dup)
-                    {
-                        if (stack.Count > 0)
-                            stack.Push(stack.Peek());
-                    }
+                    else if (instr.OpCode == OpCodes.Pop && stack.Count > 0)
+                        stack.Pop();
+                    else if (instr.OpCode == OpCodes.Dup && stack.Count > 0)
+                        stack.Push(stack.Peek());
                     else if (instr.OpCode == OpCodes.Br || instr.OpCode == OpCodes.Br_S)
                     {
                         var tgt = instr.Operand as Instruction;
@@ -743,11 +626,11 @@ namespace Fish_DeObfuscator.core.Utils
                     {
                         if (stack.Count >= 2)
                         {
-                            int b = stack.Pop();
-                            int a = stack.Pop();
-                            var tgt = instr.Operand as Instruction;
+                            int b = stack.Pop(),
+                                a = stack.Pop();
                             if (a != b)
                             {
+                                var tgt = instr.Operand as Instruction;
                                 int tgtIdx = instrs.IndexOf(tgt);
                                 if (tgtIdx != -1)
                                 {
@@ -757,34 +640,27 @@ namespace Fish_DeObfuscator.core.Utils
                             }
                         }
                     }
-                    else if (instr.OpCode == OpCodes.Beq || instr.OpCode == OpCodes.Beq_S)
+                    else if ((instr.OpCode == OpCodes.Beq || instr.OpCode == OpCodes.Beq_S) && stack.Count >= 2)
                     {
-                        if (stack.Count >= 2)
+                        int b = stack.Pop(),
+                            a = stack.Pop();
+                        if (a == b)
                         {
-                            int b = stack.Pop();
-                            int a = stack.Pop();
                             var tgt = instr.Operand as Instruction;
-                            if (a == b)
+                            int tgtIdx = instrs.IndexOf(tgt);
+                            if (tgtIdx != -1)
                             {
-                                int tgtIdx = instrs.IndexOf(tgt);
-                                if (tgtIdx != -1)
-                                {
-                                    ip = tgtIdx;
-                                    continue;
-                                }
+                                ip = tgtIdx;
+                                continue;
                             }
                         }
                     }
                     else if (instr.OpCode == OpCodes.Ldsflda)
-                    {
                         stack.Push(0);
-                    }
                 }
                 catch { }
-
                 ip++;
             }
-
             return -1;
         }
 
@@ -792,25 +668,20 @@ namespace Fish_DeObfuscator.core.Utils
         {
             var instrs = method.Body.Instructions;
             var locals = new int[method.Body.Variables.Count];
-
-            int maxSteps = 20000;
-            int ip = 0;
+            int maxSteps = 20000,
+                ip = 0;
             var stack = new Stack<int>();
 
             while (ip < instrs.Count && maxSteps-- > 0)
             {
                 var instr = instrs[ip];
                 if (instr == targetInstr)
-                {
                     return stack.Count > 0 ? stack.Peek() : -1;
-                }
 
                 try
                 {
                     if (IsIntegerConstant(instr))
-                    {
                         stack.Push(GetConstantValue(instr));
-                    }
                     else if (IsLoadLocal(instr))
                     {
                         var l = GetLocal(instr, method.Body.Variables);
@@ -822,44 +693,26 @@ namespace Fish_DeObfuscator.core.Utils
                         if (stack.Count > 0 && l != null && l.Index < locals.Length)
                             locals[l.Index] = stack.Pop();
                     }
-                    else if (instr.OpCode == OpCodes.Add)
+                    else if (instr.OpCode == OpCodes.Add && stack.Count >= 2)
+                        stack.Push(stack.Pop() + stack.Pop());
+                    else if (instr.OpCode == OpCodes.Sub && stack.Count >= 2)
                     {
-                        if (stack.Count >= 2)
-                            stack.Push(stack.Pop() + stack.Pop());
+                        int b = stack.Pop(),
+                            a = stack.Pop();
+                        stack.Push(a - b);
                     }
-                    else if (instr.OpCode == OpCodes.Sub)
+                    else if (instr.OpCode == OpCodes.Mul && stack.Count >= 2)
+                        stack.Push(stack.Pop() * stack.Pop());
+                    else if (instr.OpCode == OpCodes.Div && stack.Count >= 2)
                     {
-                        if (stack.Count >= 2)
-                        {
-                            int b = stack.Pop();
-                            int a = stack.Pop();
-                            stack.Push(a - b);
-                        }
+                        int b = stack.Pop(),
+                            a = stack.Pop();
+                        stack.Push(b == 0 ? 0 : a / b);
                     }
-                    else if (instr.OpCode == OpCodes.Mul)
-                    {
-                        if (stack.Count >= 2)
-                            stack.Push(stack.Pop() * stack.Pop());
-                    }
-                    else if (instr.OpCode == OpCodes.Div)
-                    {
-                        if (stack.Count >= 2)
-                        {
-                            int b = stack.Pop();
-                            int a = stack.Pop();
-                            stack.Push(b == 0 ? 0 : a / b);
-                        }
-                    }
-                    else if (instr.OpCode == OpCodes.Pop)
-                    {
-                        if (stack.Count > 0)
-                            stack.Pop();
-                    }
-                    else if (instr.OpCode == OpCodes.Dup)
-                    {
-                        if (stack.Count > 0)
-                            stack.Push(stack.Peek());
-                    }
+                    else if (instr.OpCode == OpCodes.Pop && stack.Count > 0)
+                        stack.Pop();
+                    else if (instr.OpCode == OpCodes.Dup && stack.Count > 0)
+                        stack.Push(stack.Peek());
                     else if (instr.OpCode == OpCodes.Br || instr.OpCode == OpCodes.Br_S)
                     {
                         var tgt = instr.Operand as Instruction;
@@ -872,19 +725,9 @@ namespace Fish_DeObfuscator.core.Utils
                     }
                 }
                 catch { }
-
                 ip++;
             }
-
             return -1;
-        }
-
-        public static Instruction FindInstruction(IList<Instruction> instrs, OpCode opCode)
-        {
-            foreach (var instr in instrs)
-                if (instr.OpCode == opCode)
-                    return instr;
-            return null;
         }
     }
 }

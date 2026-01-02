@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using dnlib.DotNet;
 using dnlib.DotNet.Emit;
-using Fish_DeObfuscator.core.Utils;
+using Fish.Shared;
 
 namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
 {
@@ -19,7 +19,7 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
 
         #region IStage
 
-        public void obf(IContext context)
+        public void Execute(IContext context)
         {
             var module = context.ModuleDefinition;
             if (module == null)
@@ -29,6 +29,9 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
             BuildMethodIndexMapping(module);
             DeobfuscateCalliInstructions(module);
             CleanupObfuscationArtifacts(module);
+
+            if (deobfuscatedCalls > 0)
+                Logger.Detail($"Resolved {deobfuscatedCalls} calli instructions");
         }
 
         #endregion
@@ -123,9 +126,9 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
                     var ldftn = instructions[i - 1];
                     var ldc = instructions[i - 2];
                     var ldsfld = instructions[i - 3];
-                    if (ldftn.OpCode == OpCodes.Ldftn && Utils.Utils.IsIntegerConstant(ldc) && ldsfld.OpCode == OpCodes.Ldsfld)
+                    if (ldftn.OpCode == OpCodes.Ldftn && Fish.Shared.Utils.IsIntegerConstant(ldc) && ldsfld.OpCode == OpCodes.Ldsfld)
                     {
-                        int index = Utils.Utils.GetConstantValue(ldc);
+                        int index = Fish.Shared.Utils.GetConstantValue(ldc);
                         var targetMethod = ldftn.Operand as IMethod;
                         if (targetMethod != null)
                             functionPointers[index] = targetMethod;
@@ -171,8 +174,8 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
                 return null;
 
             int indexValue = -1;
-            if (Utils.Utils.IsIntegerConstant(instructions[indexLoadIndex]))
-                indexValue = Utils.Utils.GetConstantValue(instructions[indexLoadIndex]);
+            if (Fish.Shared.Utils.IsIntegerConstant(instructions[indexLoadIndex]))
+                indexValue = Fish.Shared.Utils.GetConstantValue(instructions[indexLoadIndex]);
             else if (IsVariableLoad(instructions[indexLoadIndex]))
                 indexValue = TraceVariableValue(instructions, indexLoadIndex);
 
@@ -236,8 +239,8 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
                 if (IsVariableStore(instr) && GetVariableIndex(instr) == variableIndex)
                 {
                     int prevIdx = GetPreviousInstructionIndex(instructions, i - 1);
-                    if (prevIdx != -1 && Utils.Utils.IsIntegerConstant(instructions[prevIdx]))
-                        return Utils.Utils.GetConstantValue(instructions[prevIdx]);
+                    if (prevIdx != -1 && Fish.Shared.Utils.IsIntegerConstant(instructions[prevIdx]))
+                        return Fish.Shared.Utils.GetConstantValue(instructions[prevIdx]);
                     return -1;
                 }
             }
@@ -412,7 +415,7 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
 
                         if (knownField != null)
                         {
-                            int resolvedIndex = Utils.Utils.EmulateAndResolveLocal(method, blobData, dataPtrLocal, indexLocal, instrs[i]);
+                            int resolvedIndex = Fish.Shared.Utils.EmulateAndResolveLocal(method, blobData, dataPtrLocal, indexLocal, instrs[i]);
                             if (resolvedIndex != -1)
                             {
                                 var targets = functionPointerArrays[knownField];
@@ -561,11 +564,11 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
 
         #region Calli Helper Methods
 
-        private bool IsLoadLocal(Instruction instr) => Utils.Utils.IsLoadLocal(instr);
+        private bool IsLoadLocal(Instruction instr) => Fish.Shared.Utils.IsLoadLocal(instr);
 
-        private bool IsStoreLocal(Instruction instr) => Utils.Utils.IsStoreLocal(instr);
+        private bool IsStoreLocal(Instruction instr) => Fish.Shared.Utils.IsStoreLocal(instr);
 
-        private Local GetLocal(Instruction instr, IList<Local> locals) => Utils.Utils.GetLocal(instr, locals);
+        private Local GetLocal(Instruction instr, IList<Local> locals) => Fish.Shared.Utils.GetLocal(instr, locals);
 
         #endregion
     }

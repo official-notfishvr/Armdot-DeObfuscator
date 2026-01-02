@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net472</TargetFramework>
+        <RootNamespace>Fish.Shared</RootNamespace>
+        <AssemblyName>Fish.Shared</AssemblyName>
+        <LangVersion>8.0</LangVersion>
+        <OutputPath>../bin/Fish.Shared</OutputPath>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="dnlib" Version="4.5.0" />
+    </ItemGroup>
+</Project>

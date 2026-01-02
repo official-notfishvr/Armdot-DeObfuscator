@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using dnlib.DotNet;
 using dnlib.DotNet.Emit;
-using Fish_DeObfuscator.core.Utils;
+using Fish.Shared;
 
 namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
 {
@@ -19,7 +19,7 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
 
         #region IStage
 
-        public void obf(IContext context)
+        public void Execute(IContext context)
         {
             var module = context.ModuleDefinition;
             if (module == null)
@@ -27,6 +27,9 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
 
             ExtractStaticFieldData(module);
             DeobfuscateStrings(module);
+
+            if (deobfuscatedStrings > 0)
+                Logger.Detail($"Decrypted {deobfuscatedStrings} strings");
         }
 
         #endregion

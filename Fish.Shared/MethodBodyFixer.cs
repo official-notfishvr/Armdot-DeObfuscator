@@ -4,7 +4,7 @@ using System.Linq;
 using dnlib.DotNet;
 using dnlib.DotNet.Emit;
 
-namespace Fish_DeObfuscator.core.Utils
+namespace Fish.Shared
 {
     public static class MethodBodyFixer
     {
@@ -15,13 +15,8 @@ namespace Fish_DeObfuscator.core.Utils
             {
                 foreach (var method in type.Methods)
                 {
-                    if (method.HasBody)
-                    {
-                        if (FixMethodBody(method))
-                        {
-                            fixedCount++;
-                        }
-                    }
+                    if (method.HasBody && FixMethodBody(method))
+                        fixedCount++;
                 }
             }
             return fixedCount;
@@ -40,51 +35,32 @@ namespace Fish_DeObfuscator.core.Utils
                 return false;
 
             var validInstructions = new HashSet<Instruction>(instructions);
-
             modified |= FixBranchTargets(instructions, validInstructions);
-
             modified |= FixSwitchTargets(instructions, validInstructions);
-
             modified |= FixExceptionHandlers(body, validInstructions);
-
             modified |= EnsureProperEnding(body);
 
             if (modified)
             {
-                SimplifyBranches(body);
-                OptimizeBranches(body);
+                body.SimplifyBranches();
+                body.OptimizeBranches();
             }
-
             return modified;
         }
 
         private static bool FixBranchTargets(IList<Instruction> instructions, HashSet<Instruction> validInstructions)
         {
             bool modified = false;
-
             for (int i = 0; i < instructions.Count; i++)
             {
                 var instr = instructions[i];
-
                 if (instr.OpCode.OperandType == OperandType.InlineBrTarget || instr.OpCode.OperandType == OperandType.ShortInlineBrTarget)
                 {
-                    if (instr.Operand is Instruction target)
+                    if (instr.Operand is Instruction target && !validInstructions.Contains(target))
                     {
-                        if (!validInstructions.Contains(target))
-                        {
-                            var replacement = FindNearestValidInstruction(instructions, i, target);
-                            if (replacement != null)
-                            {
-                                instr.Operand = replacement;
-                                modified = true;
-                            }
-                            else
-                            {
-                                instr.OpCode = OpCodes.Nop;
-                                instr.Operand = null;
-                                modified = true;
-                            }
-                        }
+                        var replacement = i + 1 < instructions.Count ? instructions[i + 1] : instructions[instructions.Count - 1];
+                        instr.Operand = replacement;
+                        modified = true;
                     }
                     else if (instr.Operand == null && instr.OpCode.FlowControl == FlowControl.Branch)
                     {
@@ -93,14 +69,12 @@ namespace Fish_DeObfuscator.core.Utils
                     }
                 }
             }
-
             return modified;
         }
 
         private static bool FixSwitchTargets(IList<Instruction> instructions, HashSet<Instruction> validInstructions)
         {
             bool modified = false;
-
             foreach (var instr in instructions)
             {
                 if (instr.OpCode == OpCodes.Switch && instr.Operand is Instruction[] targets)
@@ -111,9 +85,7 @@ namespace Fish_DeObfuscator.core.Utils
                     for (int i = 0; i < targets.Length; i++)
                     {
                         if (targets[i] != null && validInstructions.Contains(targets[i]))
-                        {
                             newTargets[i] = targets[i];
-                        }
                         else
                         {
                             int switchIdx = instructions.IndexOf(instr);
@@ -129,7 +101,6 @@ namespace Fish_DeObfuscator.core.Utils
                     }
                 }
             }
-
             return modified;
         }
 
@@ -145,72 +116,42 @@ namespace Fish_DeObfuscator.core.Utils
 
                 if (handler.TryStart != null && !validInstructions.Contains(handler.TryStart))
                 {
-                    var replacement = FindFirstValidInstruction(instructions);
-                    if (replacement != null)
-                    {
-                        handler.TryStart = replacement;
-                        modified = true;
-                    }
-                    else
-                    {
+                    handler.TryStart = instructions.Count > 0 ? instructions[0] : null;
+                    modified = true;
+                    if (handler.TryStart == null)
                         handlerValid = false;
-                    }
                 }
 
                 if (handler.TryEnd != null && !validInstructions.Contains(handler.TryEnd))
                 {
-                    var replacement = FindLastValidInstruction(instructions);
-                    if (replacement != null)
-                    {
-                        handler.TryEnd = replacement;
-                        modified = true;
-                    }
-                    else
-                    {
+                    handler.TryEnd = instructions.Count > 0 ? instructions[instructions.Count - 1] : null;
+                    modified = true;
+                    if (handler.TryEnd == null)
                         handlerValid = false;
-                    }
                 }
 
                 if (handler.HandlerStart != null && !validInstructions.Contains(handler.HandlerStart))
                 {
-                    var replacement = handler.TryEnd ?? FindFirstValidInstruction(instructions);
-                    if (replacement != null)
-                    {
-                        handler.HandlerStart = replacement;
-                        modified = true;
-                    }
-                    else
-                    {
+                    handler.HandlerStart = handler.TryEnd ?? (instructions.Count > 0 ? instructions[0] : null);
+                    modified = true;
+                    if (handler.HandlerStart == null)
                         handlerValid = false;
-                    }
                 }
 
                 if (handler.HandlerEnd != null && !validInstructions.Contains(handler.HandlerEnd))
                 {
-                    var replacement = FindLastValidInstruction(instructions);
-                    if (replacement != null)
-                    {
-                        handler.HandlerEnd = replacement;
-                        modified = true;
-                    }
-                    else
-                    {
+                    handler.HandlerEnd = instructions.Count > 0 ? instructions[instructions.Count - 1] : null;
+                    modified = true;
+                    if (handler.HandlerEnd == null)
                         handlerValid = false;
-                    }
                 }
 
                 if (handler.FilterStart != null && !validInstructions.Contains(handler.FilterStart))
                 {
-                    var replacement = handler.TryEnd ?? FindFirstValidInstruction(instructions);
-                    if (replacement != null)
-                    {
-                        handler.FilterStart = replacement;
-                        modified = true;
-                    }
-                    else
-                    {
+                    handler.FilterStart = handler.TryEnd ?? (instructions.Count > 0 ? instructions[0] : null);
+                    modified = true;
+                    if (handler.FilterStart == null)
                         handlerValid = false;
-                    }
                 }
 
                 if (handlerValid)
@@ -234,9 +175,7 @@ namespace Fish_DeObfuscator.core.Utils
             }
 
             foreach (var handler in handlersToRemove)
-            {
                 body.ExceptionHandlers.Remove(handler);
-            }
 
             return modified;
         }
@@ -258,39 +197,7 @@ namespace Fish_DeObfuscator.core.Utils
                 instructions.Add(OpCodes.Ret.ToInstruction());
                 return true;
             }
-
             return false;
-        }
-
-        private static Instruction FindNearestValidInstruction(IList<Instruction> instructions, int currentIdx, Instruction invalidTarget)
-        {
-            if (instructions.Count == 0)
-                return null;
-
-            if (currentIdx + 1 < instructions.Count)
-                return instructions[currentIdx + 1];
-
-            return instructions[instructions.Count - 1];
-        }
-
-        private static Instruction FindFirstValidInstruction(IList<Instruction> instructions)
-        {
-            return instructions.Count > 0 ? instructions[0] : null;
-        }
-
-        private static Instruction FindLastValidInstruction(IList<Instruction> instructions)
-        {
-            return instructions.Count > 0 ? instructions[instructions.Count - 1] : null;
-        }
-
-        private static void SimplifyBranches(CilBody body)
-        {
-            body.SimplifyBranches();
-        }
-
-        private static void OptimizeBranches(CilBody body)
-        {
-            body.OptimizeBranches();
         }
 
         public static void UpdateInstructionReferences(CilBody body, Dictionary<Instruction, Instruction> oldToNew)
@@ -298,40 +205,26 @@ namespace Fish_DeObfuscator.core.Utils
             if (oldToNew == null || oldToNew.Count == 0)
                 return;
 
-            var instructions = body.Instructions;
-
-            foreach (var instr in instructions)
+            foreach (var instr in body.Instructions)
             {
                 if (instr.Operand is Instruction target && oldToNew.TryGetValue(target, out var newTarget))
-                {
                     instr.Operand = newTarget;
-                }
                 else if (instr.Operand is Instruction[] targets)
-                {
                     for (int i = 0; i < targets.Length; i++)
-                    {
                         if (oldToNew.TryGetValue(targets[i], out var newT))
-                        {
                             targets[i] = newT;
-                        }
-                    }
-                }
             }
 
             foreach (var handler in body.ExceptionHandlers)
             {
                 if (handler.TryStart != null && oldToNew.TryGetValue(handler.TryStart, out var newTryStart))
                     handler.TryStart = newTryStart;
-
                 if (handler.TryEnd != null && oldToNew.TryGetValue(handler.TryEnd, out var newTryEnd))
                     handler.TryEnd = newTryEnd;
-
                 if (handler.HandlerStart != null && oldToNew.TryGetValue(handler.HandlerStart, out var newHandlerStart))
                     handler.HandlerStart = newHandlerStart;
-
                 if (handler.HandlerEnd != null && oldToNew.TryGetValue(handler.HandlerEnd, out var newHandlerEnd))
                     handler.HandlerEnd = newHandlerEnd;
-
                 if (handler.FilterStart != null && oldToNew.TryGetValue(handler.FilterStart, out var newFilterStart))
                     handler.FilterStart = newFilterStart;
             }
@@ -347,7 +240,6 @@ namespace Fish_DeObfuscator.core.Utils
             bool modified = false;
 
             var nopRedirects = new Dictionary<Instruction, Instruction>();
-
             for (int i = 0; i < instructions.Count; i++)
             {
                 if (instructions[i].OpCode == OpCodes.Nop)
@@ -361,31 +253,22 @@ namespace Fish_DeObfuscator.core.Utils
                             break;
                         }
                     }
-
                     if (nextNonNop != null)
-                    {
                         nopRedirects[instructions[i]] = nextNonNop;
-                    }
                 }
             }
 
             if (nopRedirects.Count > 0)
-            {
                 UpdateInstructionReferences(body, nopRedirects);
-            }
 
             for (int i = instructions.Count - 1; i >= 0; i--)
             {
-                if (instructions[i].OpCode == OpCodes.Nop)
+                if (instructions[i].OpCode == OpCodes.Nop && !IsInstructionReferenced(body, instructions[i]))
                 {
-                    if (!IsInstructionReferenced(body, instructions[i]))
-                    {
-                        instructions.RemoveAt(i);
-                        modified = true;
-                    }
+                    instructions.RemoveAt(i);
+                    modified = true;
                 }
             }
-
             return modified;
         }
 
@@ -395,7 +278,6 @@ namespace Fish_DeObfuscator.core.Utils
             {
                 if (instr.Operand == target)
                     return true;
-
                 if (instr.Operand is Instruction[] targets && targets.Contains(target))
                     return true;
             }
@@ -405,7 +287,6 @@ namespace Fish_DeObfuscator.core.Utils
                 if (handler.TryStart == target || handler.TryEnd == target || handler.HandlerStart == target || handler.HandlerEnd == target || handler.FilterStart == target)
                     return true;
             }
-
             return false;
         }
     }

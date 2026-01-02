@@ -1,9 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using dnlib.DotNet;
 using dnlib.DotNet.Emit;
-using Fish_DeObfuscator.core.Utils;
+using Fish.Shared;
 
 namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
 {
@@ -20,7 +20,7 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
 
         #region IStage
 
-        public void obf(IContext context)
+        public void Execute(IContext context)
         {
             module = context.ModuleDefinition;
             calliArrays = Calli.AnalyzeFunctionPointerArrays(module);
@@ -43,12 +43,13 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[Virtualization] Error in {method.Name}: {ex.Message}");
+                        Logger.StageError($"Error in {method.Name}: {ex.Message}");
                     }
                 }
             }
 
-            Console.WriteLine($"[Virtualization] Patched {patchedCount} calli in {processedMethods} methods");
+            if (patchedCount > 0)
+                Logger.Detail($"Patched {patchedCount} calli in {processedMethods} methods");
         }
 
         #endregion
@@ -338,9 +339,9 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
                                 {
                                     for (int k = j - 1; k >= Math.Max(0, j - 5); k--)
                                     {
-                                        if (Utils.Utils.IsIntegerConstant(instructions[k]))
+                                        if (Fish.Shared.Utils.IsIntegerConstant(instructions[k]))
                                         {
-                                            int val = Utils.Utils.GetConstantValue(instructions[k]);
+                                            int val = Fish.Shared.Utils.GetConstantValue(instructions[k]);
                                             if (val >= 0 && val <= 255)
                                                 return (byte)val;
                                         }

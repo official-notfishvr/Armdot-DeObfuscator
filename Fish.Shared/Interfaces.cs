@@ -1,13 +1,12 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using dnlib.DotNet;
 
-namespace Fish_DeObfuscator.core.Utils
+namespace Fish.Shared
 {
     public enum DeobfuscationType
     {
         DotNet,
-        PowerShell,
-        Lua,
+        Native,
     }
 
     public interface IContext
@@ -30,6 +29,6 @@ namespace Fish_DeObfuscator.core.Utils
 
     public interface IStage
     {
-        void obf(IContext context);
+        void Execute(IContext context);
     }
 }

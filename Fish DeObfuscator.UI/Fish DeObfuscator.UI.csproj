@@ -22,7 +22,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>..\bin\</OutputPath>
+    <OutputPath>../bin/Fish DeObfuscator</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -31,7 +31,7 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
+    <OutputPath>../bin/Fish DeObfuscator</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -79,6 +79,10 @@
     <ProjectReference Include="..\Fish DeObfuscator\Fish DeObfuscator.csproj">
       <Project>{0684CFFB-4AA9-4486-9636-8258320DE561}</Project>
       <Name>Fish DeObfuscator</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Fish.Shared\Fish.Shared.csproj">
+      <Project>{7D01C3AA-53A7-B432-B285-75B3AEAAF45E}</Project>
+      <Name>Fish.Shared</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

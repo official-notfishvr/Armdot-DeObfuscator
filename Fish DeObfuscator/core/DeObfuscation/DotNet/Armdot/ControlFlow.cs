@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using dnlib.DotNet;
 using dnlib.DotNet.Emit;
-using Fish_DeObfuscator.core.Utils;
+using Fish.Shared;
 
 namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
 {
@@ -18,11 +18,16 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
 
         #region IStage
 
-        public void obf(IContext context)
+        private int deobfuscatedMethods = 0;
+
+        public void Execute(IContext context)
         {
             var module = context.ModuleDefinition;
             AnalyzeFunctionPointerArrays(module);
             ProcessMethods(module);
+
+            if (deobfuscatedMethods > 0)
+                Logger.Detail($"Deobfuscated {deobfuscatedMethods} methods");
         }
 
         #endregion
@@ -94,9 +99,9 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
             var instrs = method.Body.Instructions;
             for (int i = 0; i < instrs.Count - 3; i++)
             {
-                if (instrs[i].OpCode == OpCodes.Ldsfld && Utils.Utils.IsIntegerConstant(instrs[i + 1]) && instrs[i + 2].OpCode == OpCodes.Ldftn && instrs[i + 3].OpCode == OpCodes.Stelem_I)
+                if (instrs[i].OpCode == OpCodes.Ldsfld && Fish.Shared.Utils.IsIntegerConstant(instrs[i + 1]) && instrs[i + 2].OpCode == OpCodes.Ldftn && instrs[i + 3].OpCode == OpCodes.Stelem_I)
                 {
-                    int index = Utils.Utils.GetConstantValue(instrs[i + 1]);
+                    int index = Fish.Shared.Utils.GetConstantValue(instrs[i + 1]);
                     if (instrs[i + 2].Operand is IMethod m)
                         pointers[index] = m;
                 }
@@ -138,11 +143,10 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
 
         private void ProcessMethods(ModuleDefMD module)
         {
-            int processedCount = 0;
             foreach (var type in module.GetTypes())
             foreach (var method in type.Methods)
                 if (method.HasBody && DeobfuscateMethod(method))
-                    processedCount++;
+                    deobfuscatedMethods++;
         }
 
         private bool DeobfuscateMethod(MethodDef method)
@@ -366,8 +370,8 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
             for (int i = beforeIndex - 1; i >= 0; i--)
             {
                 if (IsStoreLocal(instrs[i]) && GetLocal(instrs[i], method.Body.Variables) == local)
-                    if (i > 0 && Utils.Utils.IsIntegerConstant(instrs[i - 1]))
-                        return Utils.Utils.GetConstantValue(instrs[i - 1]);
+                    if (i > 0 && Fish.Shared.Utils.IsIntegerConstant(instrs[i - 1]))
+                        return Fish.Shared.Utils.GetConstantValue(instrs[i - 1]);
             }
             return -1;
         }
@@ -389,12 +393,12 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
                         var addr = instrs[i - 2];
                         if (IsLoadArg(addr, 1))
                         {
-                            int val = Utils.Utils.EmulateStackTop(method, instrs[i]);
+                            int val = Fish.Shared.Utils.EmulateStackTop(method, instrs[i]);
                             if (val == exitValue)
                                 info.IsExit = true;
                         }
                     }
-                    int stackTop = Utils.Utils.EmulateStackTop(method, instrs[i]);
+                    int stackTop = Fish.Shared.Utils.EmulateStackTop(method, instrs[i]);
                     if (stackTop != -1 && i >= 1)
                     {
                         if (IsLoadArg(instrs[i - 1], stateParameterIndex) || (i >= 2 && IsLoadArg(instrs[i - 2], stateParameterIndex)))
@@ -663,7 +667,7 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
                     var local = GetLocal(instrs[i], method.Body.Variables);
                     if (local == info.StateVariable || local == info.ConditionVariable)
                     {
-                        if (i > 0 && Utils.Utils.IsIntegerConstant(instrs[i - 1]))
+                        if (i > 0 && Fish.Shared.Utils.IsIntegerConstant(instrs[i - 1]))
                         {
                             instrs.RemoveAt(i);
                             instrs.RemoveAt(i - 1);
@@ -799,7 +803,7 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
                         if (i > 0)
                         {
                             var prev = instrs[i - 1];
-                            if (Utils.Utils.IsIntegerConstant(prev) || IsLoadLocal(prev) || IsLoadArg(prev) || prev.OpCode == OpCodes.Ldstr || prev.OpCode == OpCodes.Ldnull)
+                            if (Fish.Shared.Utils.IsIntegerConstant(prev) || IsLoadLocal(prev) || IsLoadArg(prev) || prev.OpCode == OpCodes.Ldstr || prev.OpCode == OpCodes.Ldnull)
                             {
                                 instrs.RemoveAt(i);
                                 instrs.RemoveAt(i - 1);
@@ -846,7 +850,7 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
                 if (instrs[i].OpCode == OpCodes.Pop)
                 {
                     var prev = instrs[i - 1];
-                    if (Utils.Utils.IsIntegerConstant(prev) || IsLoadLocal(prev) || IsLoadArg(prev) || prev.OpCode == OpCodes.Ldstr || prev.OpCode == OpCodes.Ldnull || prev.OpCode == OpCodes.Ldloca || prev.OpCode == OpCodes.Ldloca_S)
+                    if (Fish.Shared.Utils.IsIntegerConstant(prev) || IsLoadLocal(prev) || IsLoadArg(prev) || prev.OpCode == OpCodes.Ldstr || prev.OpCode == OpCodes.Ldnull || prev.OpCode == OpCodes.Ldloca || prev.OpCode == OpCodes.Ldloca_S)
                     {
                         instrs.RemoveAt(i);
                         instrs.RemoveAt(i - 1);
@@ -981,11 +985,11 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
 
         #region Control Flow Helper Methods
 
-        private bool IsLoadLocal(Instruction instr) => Utils.Utils.IsLoadLocal(instr);
+        private bool IsLoadLocal(Instruction instr) => Fish.Shared.Utils.IsLoadLocal(instr);
 
-        private bool IsStoreLocal(Instruction instr) => Utils.Utils.IsStoreLocal(instr);
+        private bool IsStoreLocal(Instruction instr) => Fish.Shared.Utils.IsStoreLocal(instr);
 
-        private Local GetLocal(Instruction instr, IList<Local> locals) => Utils.Utils.GetLocal(instr, locals);
+        private Local GetLocal(Instruction instr, IList<Local> locals) => Fish.Shared.Utils.GetLocal(instr, locals);
 
         private bool IsLoadArg(Instruction instr, int index = -1)
         {

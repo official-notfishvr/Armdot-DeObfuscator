@@ -5,6 +5,7 @@ using dnlib.DotNet;
 using dnlib.DotNet.Writer;
 using Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot;
 using Fish_DeObfuscator.core.Utils;
+using Fish.Shared;
 
 namespace Fish_DeObfuscator.UI
 {

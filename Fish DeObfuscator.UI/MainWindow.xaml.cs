@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using Fish_DeObfuscator.core.Utils;
+using Fish.Shared;
 using Microsoft.Win32;
 
 namespace Fish_DeObfuscator.UI
@@ -110,7 +111,7 @@ namespace Fish_DeObfuscator.UI
 
             foreach (IStage stage in context.Options.Stages)
             {
-                stage.obf(context);
+                stage.Execute(context);
             }
 
             try

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using dnlib.DotNet;
 using dnlib.DotNet.Emit;
-using Fish_DeObfuscator.core.Utils;
+using Fish.Shared;
 
 namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
 {
@@ -13,7 +13,7 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
         private int totalResolvedAliases = 0;
         private int processedMethods = 0;
 
-        public void obf(IContext context)
+        public void Execute(IContext context)
         {
             var module = context.ModuleDefinition;
 
@@ -35,12 +35,12 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine(string.Format("[LocalCleaner] Error in {0}: {1}", method.FullName, ex.Message));
+                        Logger.Info(string.Format("[LocalCleaner] Error in {0}: {1}", method.FullName, ex.Message));
                     }
                 }
             }
 
-            Console.WriteLine(string.Format("[LocalCleaner] Removed {0} locals, resolved {1} aliases in {2} methods", totalRemovedLocals, totalResolvedAliases, processedMethods));
+            Logger.Info(string.Format("[LocalCleaner] Removed {0} locals, resolved {1} aliases in {2} methods", totalRemovedLocals, totalResolvedAliases, processedMethods));
         }
 
         private int CleanupMethod(MethodDef method)
@@ -207,10 +207,7 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
 
             var mergeMap = new Dictionary<Local, Local>();
 
-            var sortedLocals = safeLocals
-                .Where(l => liveRanges.ContainsKey(l))
-                .OrderBy(l => liveRanges[l].start)
-                .ToList();
+            var sortedLocals = safeLocals.Where(l => liveRanges.ContainsKey(l)).OrderBy(l => liveRanges[l].start).ToList();
 
             for (int i = 0; i < sortedLocals.Count; i++)
             {
@@ -235,10 +232,7 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
                     {
                         mergeMap[localB] = localA;
 
-                        liveRanges[localA] = (
-                            Math.Min(rangeA.start, rangeB.start),
-                            Math.Max(rangeA.end, rangeB.end)
-                        );
+                        liveRanges[localA] = (Math.Min(rangeA.start, rangeB.start), Math.Max(rangeA.end, rangeB.end));
                         rangeA = liveRanges[localA];
                     }
                 }
@@ -330,8 +324,7 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
         {
             if (a == null || b == null)
                 return false;
-            return a.FullName == b.FullName || 
-                   (a.ElementType == b.ElementType && a.IsPrimitive && b.IsPrimitive);
+            return a.FullName == b.FullName || (a.ElementType == b.ElementType && a.IsPrimitive && b.IsPrimitive);
         }
 
         private HashSet<Local> FindUsedLocals(MethodDef method)
@@ -648,11 +641,16 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
         {
             switch (index)
             {
-                case 0: return OpCodes.Ldloc_0;
-                case 1: return OpCodes.Ldloc_1;
-                case 2: return OpCodes.Ldloc_2;
-                case 3: return OpCodes.Ldloc_3;
-                default: return index <= 255 ? OpCodes.Ldloc_S : OpCodes.Ldloc;
+                case 0:
+                    return OpCodes.Ldloc_0;
+                case 1:
+                    return OpCodes.Ldloc_1;
+                case 2:
+                    return OpCodes.Ldloc_2;
+                case 3:
+                    return OpCodes.Ldloc_3;
+                default:
+                    return index <= 255 ? OpCodes.Ldloc_S : OpCodes.Ldloc;
             }
         }
 
@@ -660,11 +658,16 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
         {
             switch (index)
             {
-                case 0: return OpCodes.Stloc_0;
-                case 1: return OpCodes.Stloc_1;
-                case 2: return OpCodes.Stloc_2;
-                case 3: return OpCodes.Stloc_3;
-                default: return index <= 255 ? OpCodes.Stloc_S : OpCodes.Stloc;
+                case 0:
+                    return OpCodes.Stloc_0;
+                case 1:
+                    return OpCodes.Stloc_1;
+                case 2:
+                    return OpCodes.Stloc_2;
+                case 3:
+                    return OpCodes.Stloc_3;
+                default:
+                    return index <= 255 ? OpCodes.Stloc_S : OpCodes.Stloc;
             }
         }
 
@@ -691,7 +694,8 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
                 if (i.Operand is Instruction[] targets)
                 {
                     foreach (var t in targets)
-                        if (t == instr) return true;
+                        if (t == instr)
+                            return true;
                 }
             }
 
@@ -701,15 +705,13 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
         private bool IsSinglePush(Instruction instr)
         {
             var code = instr.OpCode.Code;
-            if (code == Code.Ldc_I4 || code == Code.Ldc_I4_S || code == Code.Ldc_I4_M1 || (code >= Code.Ldc_I4_0 && code <= Code.Ldc_I4_8) ||
-                code == Code.Ldc_I8 || code == Code.Ldc_R4 || code == Code.Ldc_R8 || code == Code.Ldnull || code == Code.Ldstr)
+            if (code == Code.Ldc_I4 || code == Code.Ldc_I4_S || code == Code.Ldc_I4_M1 || (code >= Code.Ldc_I4_0 && code <= Code.Ldc_I4_8) || code == Code.Ldc_I8 || code == Code.Ldc_R4 || code == Code.Ldc_R8 || code == Code.Ldnull || code == Code.Ldstr)
                 return true;
 
             if (IsLoadLocal(instr) || IsLoadLocalAddress(instr))
                 return true;
 
-            if (code == Code.Ldarg || code == Code.Ldarg_S || code == Code.Ldarg_0 || code == Code.Ldarg_1 ||
-                code == Code.Ldarg_2 || code == Code.Ldarg_3 || code == Code.Ldarga || code == Code.Ldarga_S)
+            if (code == Code.Ldarg || code == Code.Ldarg_S || code == Code.Ldarg_0 || code == Code.Ldarg_1 || code == Code.Ldarg_2 || code == Code.Ldarg_3 || code == Code.Ldarga || code == Code.Ldarga_S)
                 return true;
 
             return false;
@@ -717,17 +719,29 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
 
         private bool IsIndirectStore(Instruction instr)
         {
-            return instr.OpCode == OpCodes.Stind_I || instr.OpCode == OpCodes.Stind_I1 || instr.OpCode == OpCodes.Stind_I2 ||
-                   instr.OpCode == OpCodes.Stind_I4 || instr.OpCode == OpCodes.Stind_I8 || instr.OpCode == OpCodes.Stind_R4 ||
-                   instr.OpCode == OpCodes.Stind_R8 || instr.OpCode == OpCodes.Stind_Ref;
+            return instr.OpCode == OpCodes.Stind_I
+                || instr.OpCode == OpCodes.Stind_I1
+                || instr.OpCode == OpCodes.Stind_I2
+                || instr.OpCode == OpCodes.Stind_I4
+                || instr.OpCode == OpCodes.Stind_I8
+                || instr.OpCode == OpCodes.Stind_R4
+                || instr.OpCode == OpCodes.Stind_R8
+                || instr.OpCode == OpCodes.Stind_Ref;
         }
 
         private bool IsIndirectLoad(Instruction instr)
         {
-            return instr.OpCode == OpCodes.Ldind_I || instr.OpCode == OpCodes.Ldind_I1 || instr.OpCode == OpCodes.Ldind_I2 ||
-                   instr.OpCode == OpCodes.Ldind_I4 || instr.OpCode == OpCodes.Ldind_I8 || instr.OpCode == OpCodes.Ldind_R4 ||
-                   instr.OpCode == OpCodes.Ldind_R8 || instr.OpCode == OpCodes.Ldind_Ref || instr.OpCode == OpCodes.Ldind_U1 ||
-                   instr.OpCode == OpCodes.Ldind_U2 || instr.OpCode == OpCodes.Ldind_U4;
+            return instr.OpCode == OpCodes.Ldind_I
+                || instr.OpCode == OpCodes.Ldind_I1
+                || instr.OpCode == OpCodes.Ldind_I2
+                || instr.OpCode == OpCodes.Ldind_I4
+                || instr.OpCode == OpCodes.Ldind_I8
+                || instr.OpCode == OpCodes.Ldind_R4
+                || instr.OpCode == OpCodes.Ldind_R8
+                || instr.OpCode == OpCodes.Ldind_Ref
+                || instr.OpCode == OpCodes.Ldind_U1
+                || instr.OpCode == OpCodes.Ldind_U2
+                || instr.OpCode == OpCodes.Ldind_U4;
         }
 
         private bool IsBranch(Instruction instr)

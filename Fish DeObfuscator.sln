@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SampleEXE", "Modules\Sample
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fish DeObfuscator.UI", "Fish DeObfuscator.UI\Fish DeObfuscator.UI.csproj", "{88FF2788-A8B4-B344-1B4D-1224458B653D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fish.Shared", "Fish.Shared\Fish.Shared.csproj", "{7D01C3AA-53A7-B432-B285-75B3AEAAF45E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -43,6 +45,14 @@ Global
 		{88FF2788-A8B4-B344-1B4D-1224458B653D}.Release|Any CPU.Build.0 = Release|Any CPU
 		{88FF2788-A8B4-B344-1B4D-1224458B653D}.Release|x64.ActiveCfg = Release|Any CPU
 		{88FF2788-A8B4-B344-1B4D-1224458B653D}.Release|x64.Build.0 = Release|Any CPU
+		{7D01C3AA-53A7-B432-B285-75B3AEAAF45E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7D01C3AA-53A7-B432-B285-75B3AEAAF45E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7D01C3AA-53A7-B432-B285-75B3AEAAF45E}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{7D01C3AA-53A7-B432-B285-75B3AEAAF45E}.Debug|x64.Build.0 = Debug|Any CPU
+		{7D01C3AA-53A7-B432-B285-75B3AEAAF45E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7D01C3AA-53A7-B432-B285-75B3AEAAF45E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7D01C3AA-53A7-B432-B285-75B3AEAAF45E}.Release|x64.ActiveCfg = Release|Any CPU
+		{7D01C3AA-53A7-B432-B285-75B3AEAAF45E}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
