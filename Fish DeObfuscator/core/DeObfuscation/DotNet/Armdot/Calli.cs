@@ -14,6 +14,7 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
         private Dictionary<IField, IMethod[]> functionPointerArrays = new Dictionary<IField, IMethod[]>();
         private Dictionary<IMethod, int> methodToIndexMap = new Dictionary<IMethod, int>();
         private int deobfuscatedCalls = 0;
+        private int processedMethods = 0;
 
         #endregion
 
@@ -31,7 +32,7 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
             CleanupObfuscationArtifacts(module);
 
             if (deobfuscatedCalls > 0)
-                Logger.Detail($"Resolved {deobfuscatedCalls} calli instructions");
+                Logger.Info($"    Resolved {deobfuscatedCalls} calli instructions in {processedMethods} methods");
         }
 
         #endregion
@@ -297,7 +298,12 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
             foreach (var type in module.GetTypes())
             foreach (var method in type.Methods)
                 if (method.HasBody)
+                {
+                    int prevCount = deobfuscatedCalls;
                     DeobfuscateMethodCalli(method);
+                    if (deobfuscatedCalls > prevCount)
+                        processedMethods++;
+                }
         }
 
         private void DeobfuscateMethodCalli(MethodDef method)
@@ -339,7 +345,7 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
             int calliIdx = instructions.IndexOf(instructions[pattern.CalliIndex]);
             if (calliIdx == -1)
                 return;
-            instructions[calliIdx].OpCode = OpCodes.Call;
+            instructions[calliIdx].OpCode = (targetMethod.MethodSig != null && targetMethod.MethodSig.HasThis) ? OpCodes.Callvirt : OpCodes.Call;
             instructions[calliIdx].Operand = targetMethod;
             body.Instructions.Remove(instructions[pattern.LdelemIndex]);
             body.Instructions.Remove(instructions[pattern.IndexLoadIndex]);
@@ -376,6 +382,7 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
             byte[] blobData = null;
             if (dataField is FieldDef fd && fd.HasFieldRVA)
                 blobData = fd.InitialValue;
+
             if (blobData == null)
                 return false;
 
@@ -421,7 +428,7 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
                                 var targets = functionPointerArrays[knownField];
                                 if (resolvedIndex >= 0 && resolvedIndex < targets.Length && targets[resolvedIndex] != null)
                                 {
-                                    instrs[i].OpCode = OpCodes.Call;
+                                    instrs[i].OpCode = (targets[resolvedIndex].MethodSig != null && targets[resolvedIndex].MethodSig.HasThis) ? OpCodes.Callvirt : OpCodes.Call;
                                     instrs[i].Operand = targets[resolvedIndex];
                                     instrs[arrayIdx].OpCode = OpCodes.Nop;
                                     instrs[arrayIdx].Operand = null;
@@ -456,6 +463,8 @@ namespace Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot
                         if (type != null)
                         {
                             var fieldDef = type.Fields.FirstOrDefault(f => f.FullName == field.FullName);
+                            if (fieldDef != null)
+                                type.Fields.Remove(fieldDef);
                         }
                     }
                 }

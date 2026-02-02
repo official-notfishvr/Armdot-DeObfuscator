@@ -76,16 +76,17 @@ namespace Fish.Shared
                 return false;
             try
             {
-                if (type.BaseType?.FullName == "UnityEngine.MonoBehaviour"
+                if (
+                    type.BaseType?.FullName == "UnityEngine.MonoBehaviour"
                     || type.BaseType?.FullName == "UnityEngine.ScriptableObject"
                     || type.FullName.StartsWith("UnityEngine.")
                     || type.FullName.StartsWith("UnityEditor.")
                     || type.FullName.StartsWith("System.")
-                    || type.FullName.StartsWith("Microsoft."))
+                    || type.FullName.StartsWith("Microsoft.")
+                )
                     return true;
 
-                if (type.BaseType?.FullName == "BepInEx.BaseUnityPlugin"
-                    || type.BaseType?.FullName?.Contains("BaseUnityPlugin") == true)
+                if (type.BaseType?.FullName == "BepInEx.BaseUnityPlugin" || type.BaseType?.FullName?.Contains("BaseUnityPlugin") == true)
                     return true;
 
                 var baseType = type.BaseType;
@@ -93,9 +94,7 @@ namespace Fish.Shared
                 while (baseType != null && depth < 10)
                 {
                     var baseFullName = baseType.FullName;
-                    if (baseFullName == "UnityEngine.MonoBehaviour"
-                        || baseFullName == "UnityEngine.ScriptableObject"
-                        || baseFullName == "BepInEx.BaseUnityPlugin")
+                    if (baseFullName == "UnityEngine.MonoBehaviour" || baseFullName == "UnityEngine.ScriptableObject" || baseFullName == "BepInEx.BaseUnityPlugin")
                         return true;
 
                     if (baseType is TypeDef baseDef)

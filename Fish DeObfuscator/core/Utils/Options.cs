@@ -44,9 +44,9 @@ namespace Fish_DeObfuscator.core.Utils
             {
                 case "armdot":
                     Stages.Add(new Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot.String());
-                    Stages.Add(new Virtualization());
-                    Stages.Add(new Calli());
                     Stages.Add(new Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot.ControlFlow());
+                    Stages.Add(new Calli()); // mostly virtualization does 99% of them
+                    Stages.Add(new Virtualization { EnableVMStringDecoding = false }); // VM Strings will wipe ALL other code that the void had if it did have anything
                     Stages.Add(new LocalCleaner());
                     break;
                 default:

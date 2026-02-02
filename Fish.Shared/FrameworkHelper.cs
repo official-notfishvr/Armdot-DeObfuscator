@@ -4,7 +4,7 @@ using dnlib.DotNet;
 
 namespace Fish.Shared
 {
-    // made by chatgpt :sob and idk if even works
+    // made by ai :sob and idk if even works me was lazy
     public static class FrameworkHelper
     {
         public static IResolutionScope GetSystemAssemblyRef(ModuleDefMD module)

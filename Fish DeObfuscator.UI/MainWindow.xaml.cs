@@ -20,11 +20,7 @@ namespace Fish_DeObfuscator.UI
 
         private void BrowseButton_Click(object sender, RoutedEventArgs e)
         {
-            var dialog = new OpenFileDialog
-            {
-                Filter = ".NET Assemblies|*.dll;*.exe|All Files|*.*",
-                Title = "Select a .NET Assembly"
-            };
+            var dialog = new OpenFileDialog { Filter = ".NET Assemblies|*.dll;*.exe|All Files|*.*", Title = "Select a .NET Assembly" };
 
             if (dialog.ShowDialog() == true)
             {
@@ -102,7 +98,7 @@ namespace Fish_DeObfuscator.UI
             {
                 throw new Exception("Failed to load assembly.");
             }
- 
+
             if (context.Options.Stages.Count == 0)
             {
                 context.ModuleDefinition?.Dispose();
@@ -131,11 +127,16 @@ namespace Fish_DeObfuscator.UI
 
             Dispatcher.Invoke(() =>
             {
-                if (StringCheckBox.IsChecked == true) stages.Add("string");
-                if (VirtualizationCheckBox.IsChecked == true) stages.Add("virtualization");
-                if (CalliCheckBox.IsChecked == true) stages.Add("calli");
-                if (ControlFlowCheckBox.IsChecked == true) stages.Add("controlflow");
-                if (LocalCleanerCheckBox.IsChecked == true) stages.Add("localcleaner");
+                if (StringCheckBox.IsChecked == true)
+                    stages.Add("string");
+                if (VirtualizationCheckBox.IsChecked == true)
+                    stages.Add("virtualization");
+                if (CalliCheckBox.IsChecked == true)
+                    stages.Add("calli");
+                if (ControlFlowCheckBox.IsChecked == true)
+                    stages.Add("controlflow");
+                if (LocalCleanerCheckBox.IsChecked == true)
+                    stages.Add("localcleaner");
             });
 
             return new UIOptions(_selectedFilePath, stages);
@@ -150,10 +151,7 @@ namespace Fish_DeObfuscator.UI
             StatusText.Foreground = (Brush)FindResource("TextSecondaryBrush");
         }
 
-        private void ObfuscatorType_Changed(object sender, RoutedEventArgs e)
-        {
-
-        }
+        private void ObfuscatorType_Changed(object sender, RoutedEventArgs e) { }
 
         private void SelectAll_Click(object sender, RoutedEventArgs e)
         {

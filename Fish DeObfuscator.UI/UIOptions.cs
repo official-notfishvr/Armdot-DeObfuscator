@@ -33,14 +33,14 @@ namespace Fish_DeObfuscator.UI
                     case "string":
                         Stages.Add(new Fish_DeObfuscator.core.DeObfuscation.DotNet.Armdot.String());
                         break;
-                    case "virtualization":
-                        Stages.Add(new Virtualization());
-                        break;
-                    case "calli":
-                        Stages.Add(new Calli());
-                        break;
                     case "controlflow":
                         Stages.Add(new ControlFlow());
+                        break;
+                    case "calli":
+                        Stages.Add(new Calli()); // mostly virtualization does 99% of them
+                        break;
+                    case "virtualization":
+                        Stages.Add(new Virtualization { EnableVMStringDecoding = false }); // VM Strings will wipe ALL other code that the void had if it did have anything
                         break;
                     case "localcleaner":
                         Stages.Add(new LocalCleaner());
@@ -93,9 +93,11 @@ namespace Fish_DeObfuscator.UI
             if (_moduleDefinition == null)
                 throw new InvalidOperationException("Module definition is null.");
 
-            if (log) _logger?.Invoke($"Saving to: {Path.GetFileName(Options.AssemblyOutput)}");
+            if (log)
+                _logger?.Invoke($"Saving to: {Path.GetFileName(Options.AssemblyOutput)}");
 
-            if (log) _logger?.Invoke("Fixing method bodies...");
+            if (log)
+                _logger?.Invoke("Fixing method bodies...");
             int fixedMethods = MethodBodyFixer.FixAllMethods(_moduleDefinition);
             if (log && fixedMethods > 0)
                 _logger?.Invoke($"Fixed {fixedMethods} method(s)");
@@ -106,7 +108,8 @@ namespace Fish_DeObfuscator.UI
 
             _moduleDefinition.Write(Options.AssemblyOutput, opts);
 
-            if (log) _logger?.Invoke("Assembly saved successfully!");
+            if (log)
+                _logger?.Invoke("Assembly saved successfully!");
         }
     }
 }
